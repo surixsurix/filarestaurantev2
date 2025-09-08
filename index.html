@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Fila de Atendimento - Restaurante</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      width: 420px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+    th, td {
+      border-bottom: 1px solid #ddd;
+      text-align: center;
+      padding: 8px;
+    }
+    button {
+      border: none;
+      padding: 6px 10px;
+      margin: 2px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: white;
+    }
+    .up { background: blue; }
+    .down { background: blue; }
+    .edit { background: dodgerblue; }
+    .delete { background: red; }
+    .add { background: blue; }
+    .next { background: red; }
+    .copy { background: black; }
+    input {
+      width: 100%;
+      padding: 5px;
+      margin-top: 5px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Fila de Atendimento - Restaurante</h2>
+    <table id="tabela">
+      <thead>
+        <tr>
+          <th>Ordem</th>
+          <th>Funcionário(a)</th>
+          <th>Ação</th>
+        </tr>
+      </thead>
+      <tbody id="corpoTabela"></tbody>
+    </table>
+
+    <input type="text" id="saida" readonly>
+
+    <div style="margin-top:10px;">
+      <button class="add" onclick="adicionar()">Adicionar</button>
+      <button class="next" onclick="avancar()">Avançar</button>
+      <button class="copy" onclick="copiar()">Copiar</button>
+    </div>
+  </div>
+
+  <script>
+    let fila = ["Scooty", "Lange", "saci"];
+
+    function renderizar() {
+      const corpo = document.getElementById("corpoTabela");
+      corpo.innerHTML = "";
+      fila.forEach((nome, i) => {
+        corpo.innerHTML += `
+          <tr>
+            <td>${i+1}</td>
+            <td>${nome}</td>
+            <td>
+              <button class="up" onclick="mover(${i}, -1)">⬆</button>
+              <button class="down" onclick="mover(${i}, 1)">⬇</button>
+              <button class="edit" onclick="editar(${i})">✏</button>
+              <button class="delete" onclick="remover(${i})">❌</button>
+            </td>
+          </tr>
+        `;
+      });
+      document.getElementById("saida").value = "Ordem da Fila: " + fila.join(" - ");
+    }
+
+    function mover(i, dir) {
+      let novo = i + dir;
+      if (novo >= 0 && novo < fila.length) {
+        [fila[i], fila[novo]] = [fila[novo], fila[i]];
+        renderizar();
+      }
+    }
+
+    function remover(i) {
+      fila.splice(i, 1);
+      renderizar();
+    }
+
+    function editar(i) {
+      let novoNome = prompt("Editar nome do funcionário(a):", fila[i]);
+      if (novoNome) fila[i] = novoNome;
+      renderizar();
+    }
+
+    function adicionar() {
+      let nome = prompt("Digite o nome do funcionário(a):");
+      if (nome) {
+        fila.push(nome);
+        renderizar();
+      }
+    }
+
+    function avancar() {
+      if (fila.length > 0) {
+        fila.push(fila.shift());
+        renderizar();
+      }
+    }
+
+    function copiar() {
+      let texto = document.getElementById("saida");
+      texto.select();
+      document.execCommand("copy");
+      alert("Fila copiada!");
+    }
+
+    renderizar();
+  </script>
+</body>
+</html>
