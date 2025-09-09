@@ -44,6 +44,7 @@
     .add { background: blue; }
     .next { background: red; }
     .copy { background: black; }
+    .restore { background: green; }
     input {
       width: 100%;
       padding: 5px;
@@ -94,6 +95,7 @@
       <button class="add" onclick="adicionar()">Adicionar</button>
       <button class="next" onclick="avancar()">Avançar</button>
       <button class="copy" onclick="copiar()">Copiar</button>
+      <button class="restore" onclick="restaurar()">Restaurar</button>
     </div>
   </div>
 
@@ -102,6 +104,11 @@
 
   <script>
     let fila = ["Scooty", "saci", "gabes"];
+    let filaAnterior = [...fila]; // guarda o estado anterior
+
+    function salvarEstado() {
+      filaAnterior = [...fila]; // salva antes de qualquer alteração
+    }
 
     function renderizar() {
       const corpo = document.getElementById("corpoTabela");
@@ -124,6 +131,7 @@
     }
 
     function mover(i, dir) {
+      salvarEstado();
       let novo = i + dir;
       if (novo >= 0 && novo < fila.length) {
         [fila[i], fila[novo]] = [fila[novo], fila[i]];
@@ -132,17 +140,20 @@
     }
 
     function remover(i) {
+      salvarEstado();
       fila.splice(i, 1);
       renderizar();
     }
 
     function editar(i) {
+      salvarEstado();
       let novoNome = prompt("Editar nome do funcionário(a):", fila[i]);
       if (novoNome) fila[i] = novoNome;
       renderizar();
     }
 
     function adicionar() {
+      salvarEstado();
       let nome = prompt("Digite o nome do funcionário(a):");
       if (nome) {
         fila.push(nome);
@@ -151,6 +162,7 @@
     }
 
     function avancar() {
+      salvarEstado();
       if (fila.length > 0) {
         fila.push(fila.shift());
         renderizar();
@@ -170,6 +182,13 @@
       setTimeout(() => {
         popup.classList.remove("show");
       }, 5000);
+    }
+
+    function restaurar() {
+      let temp = [...fila];
+      fila = [...filaAnterior]; // volta ao estado anterior
+      filaAnterior = [...temp]; // permite desfazer/alternar
+      renderizar();
     }
 
     renderizar();
