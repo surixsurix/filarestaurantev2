@@ -18,6 +18,7 @@
       border-radius: 10px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
       width: 420px;
+      text-align: center;
     }
     table {
       width: 100%;
@@ -32,19 +33,21 @@
     button {
       border: none;
       padding: 6px 10px;
-      margin: 2px;
+      margin: 5px;
       border-radius: 6px;
       cursor: pointer;
       color: white;
+      min-width: 80px;
+      font-size: 16px;
     }
-    .up { background: blue; }
-    .down { background: blue; }
-    .edit { background: dodgerblue; }
+    .up { background: blue; font-size: 20px; font-weight: bold; }
+    .down { background: blue; font-size: 20px; font-weight: bold; }
+    .edit { background: dodgerblue; font-size: 18px; }
     .delete { background: red; }
     .add { background: blue; }
     .next { background: red; }
-    .copy { background: black; }
-    .restore { background: green; }
+    .copy { background: green; }
+    .restore { background: gray; }
     input {
       width: 100%;
       padding: 5px;
@@ -91,16 +94,19 @@
 
     <input type="text" id="saida" readonly>
 
-    <div style="margin-top:10px;">
+    <div style="margin-top:15px;">
+      <button class="restore" onclick="restaurar()">Restaurar</button>
       <button class="add" onclick="adicionar()">Adicionar</button>
       <button class="next" onclick="avancar()">Avançar</button>
       <button class="copy" onclick="copiar()">Copiar</button>
-      <button class="restore" onclick="restaurar()">Restaurar</button>
     </div>
   </div>
 
   <!-- Notificação popup -->
   <div id="popup">Fila copiada!</div>
+
+  <!-- Som de notificação -->
+  <audio id="notificacaoSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
   <script>
     let fila = ["Scooty", "saci", "gabes"];
@@ -119,9 +125,9 @@
             <td>${i+1}</td>
             <td>${nome}</td>
             <td>
-              <button class="up" onclick="mover(${i}, -1)">⬆</button>
-              <button class="down" onclick="mover(${i}, 1)">⬇</button>
-              <button class="edit" onclick="editar(${i})">✏</button>
+              <button class="up" onclick="mover(${i}, -1)">⬆️</button>
+              <button class="down" onclick="mover(${i}, 1)">⬇️</button>
+              <button class="edit" onclick="editar(${i})">✏️ Editar</button>
               <button class="delete" onclick="remover(${i})">❌</button>
             </td>
           </tr>
@@ -173,6 +179,9 @@
       let texto = document.getElementById("saida");
       texto.select();
       document.execCommand("copy");
+
+      // Som de notificação
+      document.getElementById("notificacaoSound").play();
 
       // Mostra popup
       let popup = document.getElementById("popup");
