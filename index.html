@@ -91,7 +91,8 @@
 <body>
     <div class="container" id="draggableContainer">
         <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-            <button class="pip-button" onclick="togglePiP()" id="pipButton">PiP Externo 🖼️</button>
+            <!-- removido onclick inline -->
+            <button class="pip-button" id="pipButton">PiP Externo 🖼️</button>
         </div>
         <hr>
         
@@ -116,14 +117,16 @@
                 <button class="next" id="btnAvancar">Avançar</button>
                 <button class="copy" id="btnCopiar">Copiar</button>
             </div>
+
+            <!-- movi o popup para dentro do queueContent para que apareça também no PiP -->
+            <div id="popup">Fila copiada!</div>
         </div>
     </div>
-
-    <div id="popup">Fila copiada!</div>
 
     <audio id="notificacaoSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
     <script>
+        // --- Estado da fila ---
         let fila = ["Scooty", "saci", "gabes"];
         let filaAnterior = [...fila];
 
@@ -131,8 +134,22 @@
             filaAnterior = [...fila];
         }
 
+        // referência para a janela PiP (se aberta)
+        let pipWindow = null;
+        const draggableContainer = document.getElementById("draggableContainer");
+        const queueContent = document.getElementById('queueContent');
+
+        // Retorna o documento "ativo": se PiP estiver aberto, usa o documento do PiP, senão o document da aba.
+        function activeDoc() {
+            return (pipWindow && pipWindow.document) ? pipWindow.document : document;
+        }
+
+        // Renderiza sempre no documento ativo
         function renderizar() {
-            const corpo = document.getElementById("corpoTabela");
+            const doc = activeDoc();
+            const corpo = doc.getElementById("corpoTabela");
+            if (!corpo) return; // segurança
+
             corpo.innerHTML = "";
             fila.forEach((nome, i) => {
                 corpo.innerHTML += `
@@ -150,7 +167,9 @@
                     </tr>
                 `;
             });
-            document.getElementById("saida").value = ":r Ordem da Fila: " + fila.join(" - ");
+
+            const saidaElem = doc.getElementById("saida");
+            if (saidaElem) saidaElem.value = ":r Ordem da Fila: " + fila.join(" - ");
         }
 
         function mover(i, dir) {
@@ -170,6 +189,7 @@
 
         function editar(i) {
             salvarEstado();
+            // prompt precisa ser chamado no contexto da aba — chamamos no window principal
             let novoNome = prompt("Editar nome do funcionário(a):", fila[i]);
             if (novoNome) fila[i] = novoNome;
             renderizar();
@@ -192,24 +212,40 @@
             }
         }
 
+        // Mostrar popup (no documento fornecido)
+        function showPopup(doc) {
+            const popup = doc.getElementById("popup");
+            if (!popup) return;
+            popup.classList.add("show");
+            setTimeout(() => popup.classList.remove("show"), 3000);
+        }
+
+        // Copiar texto (usa documento ativo para ler o campo; usa navigator.clipboard do contexto principal)
         function copiar() {
-            let texto = document.getElementById("saida");
-            
-            navigator.clipboard.writeText(texto.value).then(() => {
-                document.getElementById("notificacaoSound").play();
-                let popup = document.getElementById("popup");
-                popup.classList.add("show");
-                setTimeout(() => popup.classList.remove("show"), 5000);
+            const doc = activeDoc();
+            const textoElem = doc.getElementById("saida");
+            const valor = textoElem ? textoElem.value : (":r Ordem da Fila: " + fila.join(" - "));
+
+            // tenta API moderna
+            navigator.clipboard.writeText(valor).then(() => {
+                // tocar som no contexto da aba principal (audio está aqui)
+                document.getElementById("notificacaoSound").play().catch(()=>{});
+                showPopup(doc);
             }).catch(err => {
-                console.warn('Falha na cópia via API moderna. Usando fallback.', err);
+                console.warn('Falha na cópia via API moderna. Tentando fallback.', err);
                 try {
-                    texto.select();
-                    texto.focus();
-                    document.execCommand("copy");
-                    document.getElementById("notificacaoSound").play();
-                    let popup = document.getElementById("popup");
-                    popup.classList.add("show");
-                    setTimeout(() => popup.classList.remove("show"), 5000);
+                    if (textoElem) {
+                        // seleciona no documento correto e executa copy via execCommand nesse documento
+                        textoElem.select();
+                        textoElem.focus();
+                        const docExec = doc;
+                        if (docExec.execCommand && docExec.execCommand('copy')) {
+                            document.getElementById("notificacaoSound").play().catch(()=>{});
+                            showPopup(doc);
+                            return;
+                        }
+                    }
+                    throw new Error("Fallback falhou");
                 } catch (fail) {
                     console.error('Falha no fallback de cópia: ', fail);
                     alert("A cópia falhou. Seu navegador pode estar bloqueando.");
@@ -224,15 +260,66 @@
             renderizar();
         }
 
-        let pipWindow = null;
-        const draggableContainer = document.getElementById("draggableContainer");
-        const queueContent = document.getElementById('queueContent');
+        // ---------------------------
+        // Função que (re)liga os handlers no documento passado
+        // ---------------------------
+        function bindUI(doc) {
+            if (!doc) return;
 
+            // botões principais
+            const btnRest = doc.getElementById("btnRestaurar");
+            if (btnRest && !btnRest.__bound) {
+                btnRest.addEventListener("click", restaurar);
+                btnRest.__bound = true;
+            }
+
+            const btnAdd = doc.getElementById("btnAdicionar");
+            if (btnAdd && !btnAdd.__bound) {
+                btnAdd.addEventListener("click", adicionar);
+                btnAdd.__bound = true;
+            }
+
+            const btnAdv = doc.getElementById("btnAvancar");
+            if (btnAdv && !btnAdv.__bound) {
+                btnAdv.addEventListener("click", avancar);
+                btnAdv.__bound = true;
+            }
+
+            const btnCopy = doc.getElementById("btnCopiar");
+            if (btnCopy && !btnCopy.__bound) {
+                btnCopy.addEventListener("click", copiar);
+                btnCopy.__bound = true;
+            }
+
+            // delegação para os botões dentro da tabela
+            const corpo = doc.getElementById("corpoTabela");
+            if (corpo && !corpo.__bound) {
+                corpo.addEventListener('click', function (event) {
+                    const target = event.target;
+                    if (target.matches('[data-action]')) {
+                        const action = target.getAttribute('data-action');
+                        const index = parseInt(target.getAttribute('data-index'), 10);
+                        if (action === 'move') {
+                            mover(index, parseInt(target.getAttribute('data-dir'), 10));
+                        } else if (action === 'edit') {
+                            editar(index);
+                        } else if (action === 'remove') {
+                            remover(index);
+                        }
+                    }
+                });
+                corpo.__bound = true;
+            }
+        }
+
+        // Toggle PiP externo (Document Picture in Picture)
         function togglePiP() {
+            // pip API experimental
             if (!('documentPictureInPicture' in window)) {
-                alert("O PiP Externo não é suportado pelo seu navegador (use o Chrome mais recente).");
+                alert("O PiP Externo (Document PiP API) não é suportado pelo seu navegador (use o Chrome mais recente).");
                 return;
             }
+
             if (pipWindow) {
                 closePiP();
             } else {
@@ -251,52 +338,54 @@
                 return;
             }
 
+            // move o queueContent para o documento do PiP
             pipWindow.document.body.appendChild(queueContent);
 
+            // aplica o mesmo estilo
             const style = document.createElement('style');
             style.textContent = document.querySelector('style').textContent;
             pipWindow.document.head.appendChild(style);
 
             draggableContainer.classList.add('hidden-in-main');
+
+            // re-bind no documento do PiP
+            bindUI(pipWindow.document);
+
+            // atualizar texto do botão (o botão visível continua sendo o da aba, que está escondido)
             document.getElementById("pipButton").textContent = "Voltar para Aba ↩️";
 
+            // quando a "página" do pip for escondida (fechada), fecharemos o PiP
             pipWindow.addEventListener('pagehide', closePiP);
         }
 
         function closePiP() {
             if (!pipWindow) return;
+
+            // traz de volta para a aba original
             draggableContainer.appendChild(queueContent);
             draggableContainer.classList.remove('hidden-in-main');
-            pipWindow.close();
+
+            try { pipWindow.close(); } catch (e) { /* ignore */ }
             pipWindow = null;
+
+            // re-bind no documento principal
+            bindUI(document);
+
             document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
+
+            // re-renderiza no documento atual (agora volta para o principal)
             renderizar();
         }
 
-        // Delegação para botões da tabela
-        const corpoTabela = document.getElementById("corpoTabela");
-        corpoTabela.addEventListener('click', (event) => {
-            const target = event.target;
-            if (target.matches('[data-action]')) {
-                const action = target.getAttribute('data-action');
-                const index = parseInt(target.getAttribute('data-index'));
-                if (action === 'move') {
-                    mover(index, parseInt(target.getAttribute('data-dir')));
-                } else if (action === 'edit') {
-                    editar(index);
-                } else if (action === 'remove') {
-                    remover(index);
-                }
-            }
-        });
+        // liga o botão PiP da aba principal
+        document.getElementById("pipButton").addEventListener("click", togglePiP);
 
-        // 🔥 Handlers para os botões principais
-        document.getElementById("btnRestaurar").addEventListener("click", restaurar);
-        document.getElementById("btnAdicionar").addEventListener("click", adicionar);
-        document.getElementById("btnAvancar").addEventListener("click", avancar);
-        document.getElementById("btnCopiar").addEventListener("click", copiar);
+        // liga os handlers iniciais no documento principal
+        bindUI(document);
 
+        // inicializa a renderização
         renderizar();
+
     </script>
 </body>
 </html>
