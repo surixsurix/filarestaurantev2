@@ -12,20 +12,7 @@
             padding: 20px;
         }
 
-        /* Estilo para quando o CONTAINER estiver fixo/flutuante (DENTRO DA ABA) */
-        .container.floating {
-            position: fixed;
-            top: 50px;
-            right: 50px;
-            width: 350px;
-            cursor: grab;
-            margin: 0;
-            z-index: 999;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            transition: width 0.3s; /* Adiciona transição para o resize */
-        }
-
-        /* Estilo padrão do CONTAINER no modo normal */
+        /* Estilo padrão do CONTAINER no modo normal (agora sempre centralizado) */
         .container {
             background: white;
             padding: 20px;
@@ -33,7 +20,7 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             width: 420px;
             text-align: center;
-            margin: 20px auto;
+            margin: 20px auto; /* Centraliza o container na tela */
         }
 
         /* Esconde o container principal quando ele está no PiP */
@@ -68,8 +55,7 @@
         .next { background: red; }
         .copy { background: green; }
         .restore { background: gray; }
-        .float-button { background: purple; }
-        .pip-button { background: orange; } /* Novo botão PiP */
+        .pip-button { background: orange; }
 
         input {
             width: 100%;
@@ -106,8 +92,7 @@
 </head>
 <body>
     <div class="container" id="draggableContainer">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <button class="float-button" onclick="toggleFloat()" id="floatButton">Fixar/Mover 📌</button>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
             <button class="pip-button" onclick="togglePiP()" id="pipButton">PiP Externo 🖼️</button>
         </div>
         <hr>
@@ -212,17 +197,27 @@
 
         function copiar() {
             let texto = document.getElementById("saida");
-            texto.select();
-            document.execCommand("copy");
+            
+            // Usando a API moderna Clipboard
+            navigator.clipboard.writeText(texto.value).then(() => {
+                document.getElementById("notificacaoSound").play();
 
-            document.getElementById("notificacaoSound").play();
+                let popup = document.getElementById("popup");
+                popup.classList.add("show");
 
-            let popup = document.getElementById("popup");
-            popup.classList.add("show");
-
-            setTimeout(() => {
-                popup.classList.remove("show");
-            }, 5000);
+                setTimeout(() => {
+                    popup.classList.remove("show");
+                }, 5000);
+            }).catch(err => {
+                console.error('Erro ao copiar: ', err);
+                // Fallback para document.execCommand (obsoleto, mas para compatibilidade)
+                try {
+                    texto.select();
+                    document.execCommand("copy");
+                } catch (fail) {
+                    console.error('Falha no fallback de cópia: ', fail);
+                }
+            });
         }
 
         function restaurar() {
@@ -232,82 +227,11 @@
             renderizar();
         }
 
-        // --- CÓDIGO DO BALÃO FLUTUANTE/MÓVEL (DENTRO DA ABA) ---
+        // O código do balão flutuante/móvel (toggleFloat e dragElement) foi removido.
 
-        const draggableContainer = document.getElementById("draggableContainer");
-        const floatButton = document.getElementById("floatButton");
-        let isFloating = false;
-
-        function toggleFloat() {
-            // Se estiver no PiP, primeiro saia do PiP
-            if (isPiPActive) {
-                closePiP();
-                return; // PiP será reativado no modo normal após a saída
-            }
-
-            isFloating = !isFloating;
-            draggableContainer.classList.toggle("floating", isFloating);
-            
-            if (isFloating) {
-                floatButton.textContent = "Fixar no Centro 📌";
-                dragElement(draggableContainer);
-            } else {
-                floatButton.textContent = "Fixar/Mover 📌";
-                draggableContainer.style.top = null;
-                draggableContainer.style.left = null;
-                draggableContainer.style.right = null;
-                draggableContainer.style.bottom = null;
-            }
-        }
-
-        function dragElement(elmnt) {
-            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-            
-            elmnt.onmousedown = dragMouseDown;
-
-            function dragMouseDown(e) {
-                // Só arrasta se estiver no modo floating e não no PiP
-                if (!isFloating || isPiPActive) return;
-
-                e = e || window.event;
-                e.preventDefault(); 
-                
-                pos3 = e.clientX;
-                pos4 = e.clientY;
-                
-                document.onmouseup = closeDragElement;
-                document.onmousemove = elementDrag;
-            }
-
-            function elementDrag(e) {
-                if (!isFloating) {
-                    closeDragElement();
-                    return;
-                }
-                
-                e = e || window.event;
-                e.preventDefault();
-                
-                pos1 = pos3 - e.clientX;
-                pos2 = pos4 - e.clientY;
-                pos3 = e.clientX;
-                pos4 = e.clientY;
-                
-                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
-                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
-                
-                elmnt.style.right = null;
-                elmnt.style.bottom = null;
-            }
-
-            function closeDragElement() {
-                document.onmouseup = null;
-                document.onmousemove = null;
-            }
-        }
-
-        // --- CÓDIGO DO DOCUMENT PICTURE-IN-PICTURE (NOVO) ---
+        // --- CÓDIGO DO DOCUMENT PICTURE-IN-PICTURE ---
         let pipWindow = null;
+        const draggableContainer = document.getElementById("draggableContainer");
         const queueContent = document.getElementById('queueContent');
         let isPiPActive = false;
 
@@ -374,12 +298,6 @@
             // 4. Atualiza o estado e o botão
             isPiPActive = false;
             document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
-
-            // 5. Garante que o modo de flutuação DENTRO DA ABA esteja desativado
-            isFloating = false;
-            draggableContainer.classList.remove("floating");
-            draggableContainer.style.top = null;
-            draggableContainer.style.left = null;
             
             renderizar(); // Força a renderização para garantir que todos os eventos estejam ligados corretamente.
         }
