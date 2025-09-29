@@ -12,7 +12,6 @@
             padding: 20px;
         }
 
-        /* Estilo padrão do CONTAINER no modo normal (agora sempre centralizado) */
         .container {
             background: white;
             padding: 20px;
@@ -20,10 +19,9 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             width: 420px;
             text-align: center;
-            margin: 20px auto; /* Centraliza o container na tela */
+            margin: 20px auto;
         }
 
-        /* Esconde o container principal quando ele está no PiP */
         .container.hidden-in-main {
             display: none !important;
         }
@@ -47,7 +45,6 @@
             color: white;
             font-size: 16px;
         }
-        /* Os botões da tabela foram atualizados para não usar 'onclick' direto */
         .up { background: blue; font-size: 20px; font-weight: bold; }
         .down { background: blue; font-size: 20px; font-weight: bold; }
         .edit { background: dodgerblue; font-size: 20px; }
@@ -71,7 +68,6 @@
             gap: 6px;
         }
 
-        /* Estilo da notificação popup */
         #popup {
             position: fixed;
             bottom: -60px;
@@ -115,10 +111,10 @@
             <input type="text" id="saida" readonly>
 
             <div style="margin-top:15px;">
-                <button class="restore" onclick="restaurar()">Restaurar</button>
-                <button class="add" onclick="adicionar()">Adicionar</button>
-                <button class="next" onclick="avancar()">Avançar</button>
-                <button class="copy" onclick="copiar()">Copiar</button>
+                <button class="restore" id="btnRestaurar">Restaurar</button>
+                <button class="add" id="btnAdicionar">Adicionar</button>
+                <button class="next" id="btnAvancar">Avançar</button>
+                <button class="copy" id="btnCopiar">Copiar</button>
             </div>
         </div>
     </div>
@@ -128,7 +124,6 @@
     <audio id="notificacaoSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
     <script>
-        // --- VARIÁVEIS E LÓGICA DA FILA ---
         let fila = ["Scooty", "saci", "gabes"];
         let filaAnterior = [...fila];
 
@@ -140,7 +135,6 @@
             const corpo = document.getElementById("corpoTabela");
             corpo.innerHTML = "";
             fila.forEach((nome, i) => {
-                // CORREÇÃO 1: Usando data-attributes para Delegação de Eventos
                 corpo.innerHTML += `
                     <tr>
                         <td>${i+1}</td>
@@ -198,36 +192,24 @@
             }
         }
 
-        // CORREÇÃO 2: Funçao copiar atualizada para usar fallback no PiP
         function copiar() {
             let texto = document.getElementById("saida");
             
-            // Tenta usar a API moderna navigator.clipboard
             navigator.clipboard.writeText(texto.value).then(() => {
                 document.getElementById("notificacaoSound").play();
-
                 let popup = document.getElementById("popup");
                 popup.classList.add("show");
-
-                setTimeout(() => {
-                    popup.classList.remove("show");
-                }, 5000);
+                setTimeout(() => popup.classList.remove("show"), 5000);
             }).catch(err => {
-                // Executa o fallback quando o navigator.clipboard falhar (como no PiP)
                 console.warn('Falha na cópia via API moderna. Usando fallback.', err);
                 try {
                     texto.select();
-                    texto.focus(); // Tenta focar para aumentar a chance de sucesso do comando
+                    texto.focus();
                     document.execCommand("copy");
-                    
-                    // Notificação para o fallback
                     document.getElementById("notificacaoSound").play();
                     let popup = document.getElementById("popup");
                     popup.classList.add("show");
-                    setTimeout(() => {
-                        popup.classList.remove("show");
-                    }, 5000);
-
+                    setTimeout(() => popup.classList.remove("show"), 5000);
                 } catch (fail) {
                     console.error('Falha no fallback de cópia: ', fail);
                     alert("A cópia falhou. Seu navegador pode estar bloqueando.");
@@ -242,18 +224,15 @@
             renderizar();
         }
 
-        // --- CÓDIGO DO DOCUMENT PICTURE-IN-PICTURE (inalterado) ---
         let pipWindow = null;
         const draggableContainer = document.getElementById("draggableContainer");
         const queueContent = document.getElementById('queueContent');
-        let isPiPActive = false;
 
         function togglePiP() {
             if (!('documentPictureInPicture' in window)) {
-                alert("O PiP Externo (Document PiP API) não é suportado pelo seu navegador (use o Chrome mais recente).");
+                alert("O PiP Externo não é suportado pelo seu navegador (use o Chrome mais recente).");
                 return;
             }
-
             if (pipWindow) {
                 closePiP();
             } else {
@@ -279,8 +258,6 @@
             pipWindow.document.head.appendChild(style);
 
             draggableContainer.classList.add('hidden-in-main');
-            
-            isPiPActive = true;
             document.getElementById("pipButton").textContent = "Voltar para Aba ↩️";
 
             pipWindow.addEventListener('pagehide', closePiP);
@@ -288,33 +265,23 @@
 
         function closePiP() {
             if (!pipWindow) return;
-
             draggableContainer.appendChild(queueContent);
-            
             draggableContainer.classList.remove('hidden-in-main');
-
             pipWindow.close();
             pipWindow = null;
-
-            isPiPActive = false;
             document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
-            
             renderizar();
         }
 
-        // CORREÇÃO 1: DELEGAÇÃO DE EVENTOS para botões da tabela
+        // Delegação para botões da tabela
         const corpoTabela = document.getElementById("corpoTabela");
-
         corpoTabela.addEventListener('click', (event) => {
             const target = event.target;
-            
             if (target.matches('[data-action]')) {
                 const action = target.getAttribute('data-action');
                 const index = parseInt(target.getAttribute('data-index'));
-
                 if (action === 'move') {
-                    const dir = parseInt(target.getAttribute('data-dir'));
-                    mover(index, dir);
+                    mover(index, parseInt(target.getAttribute('data-dir')));
                 } else if (action === 'edit') {
                     editar(index);
                 } else if (action === 'remove') {
@@ -323,7 +290,12 @@
             }
         });
 
-        // Inicializa a renderização da fila
+        // 🔥 Handlers para os botões principais
+        document.getElementById("btnRestaurar").addEventListener("click", restaurar);
+        document.getElementById("btnAdicionar").addEventListener("click", adicionar);
+        document.getElementById("btnAvancar").addEventListener("click", avancar);
+        document.getElementById("btnCopiar").addEventListener("click", copiar);
+
         renderizar();
     </script>
 </body>
