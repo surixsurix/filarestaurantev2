@@ -140,7 +140,7 @@
             const corpo = document.getElementById("corpoTabela");
             corpo.innerHTML = "";
             fila.forEach((nome, i) => {
-                // ATENÇÃO: Os atributos 'onclick' foram removidos e substituídos por 'data-action' e 'data-index'
+                // CORREÇÃO 1: Usando data-attributes para Delegação de Eventos
                 corpo.innerHTML += `
                     <tr>
                         <td>${i+1}</td>
@@ -198,9 +198,11 @@
             }
         }
 
+        // CORREÇÃO 2: Funçao copiar atualizada para usar fallback no PiP
         function copiar() {
             let texto = document.getElementById("saida");
             
+            // Tenta usar a API moderna navigator.clipboard
             navigator.clipboard.writeText(texto.value).then(() => {
                 document.getElementById("notificacaoSound").play();
 
@@ -211,12 +213,24 @@
                     popup.classList.remove("show");
                 }, 5000);
             }).catch(err => {
-                console.error('Erro ao copiar: ', err);
+                // Executa o fallback quando o navigator.clipboard falhar (como no PiP)
+                console.warn('Falha na cópia via API moderna. Usando fallback.', err);
                 try {
                     texto.select();
+                    texto.focus(); // Tenta focar para aumentar a chance de sucesso do comando
                     document.execCommand("copy");
+                    
+                    // Notificação para o fallback
+                    document.getElementById("notificacaoSound").play();
+                    let popup = document.getElementById("popup");
+                    popup.classList.add("show");
+                    setTimeout(() => {
+                        popup.classList.remove("show");
+                    }, 5000);
+
                 } catch (fail) {
                     console.error('Falha no fallback de cópia: ', fail);
+                    alert("A cópia falhou. Seu navegador pode estar bloqueando.");
                 }
             });
         }
@@ -241,17 +255,14 @@
             }
 
             if (pipWindow) {
-                // Se já estiver ativo, feche
                 closePiP();
             } else {
-                // Se não estiver ativo, abra
                 openPiP();
             }
         }
 
         async function openPiP() {
             try {
-                // Define um tamanho inicial para a janela PiP
                 pipWindow = await documentPictureInPicture.requestWindow({
                     width: 350,
                     height: 500
@@ -261,56 +272,44 @@
                 return;
             }
 
-            // Transfere o conteúdo (a fila) para a nova janela
             pipWindow.document.body.appendChild(queueContent);
 
-            // Copia os estilos CSS para que o conteúdo não fique sem formatação
             const style = document.createElement('style');
             style.textContent = document.querySelector('style').textContent;
             pipWindow.document.head.appendChild(style);
 
-            // Marca o container principal como "escondido" (pois o conteúdo está no PiP)
             draggableContainer.classList.add('hidden-in-main');
             
-            // Atualiza o estado e o botão
             isPiPActive = true;
             document.getElementById("pipButton").textContent = "Voltar para Aba ↩️";
 
-            // Configura o que fazer quando o usuário fecha a janela PiP
             pipWindow.addEventListener('pagehide', closePiP);
         }
 
         function closePiP() {
             if (!pipWindow) return;
 
-            // Move o conteúdo de volta para o container original
             draggableContainer.appendChild(queueContent);
             
-            // Remove a marcação de "escondido"
             draggableContainer.classList.remove('hidden-in-main');
 
-            // Fecha a janela PiP (caso não tenha sido fechada pelo usuário)
             pipWindow.close();
             pipWindow = null;
 
-            // Atualiza o estado e o botão
             isPiPActive = false;
             document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
             
-            renderizar(); // Força a renderização
+            renderizar();
         }
 
-        // --- DELEGAÇÃO DE EVENTOS: SOLUÇÃO PARA O BUG NO PIP ---
+        // CORREÇÃO 1: DELEGAÇÃO DE EVENTOS para botões da tabela
         const corpoTabela = document.getElementById("corpoTabela");
 
-        // Adiciona um único listener no corpo da tabela que funciona mesmo no PiP
         corpoTabela.addEventListener('click', (event) => {
             const target = event.target;
             
-            // Verifica se o elemento clicado é um botão de ação
             if (target.matches('[data-action]')) {
                 const action = target.getAttribute('data-action');
-                // Pega o índice do funcionário na fila
                 const index = parseInt(target.getAttribute('data-index'));
 
                 if (action === 'move') {
