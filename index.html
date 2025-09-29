@@ -56,11 +56,10 @@
         .restore { background: gray; }
         .pip-button { background: orange; }
 
-        input {
-            width: 100%;
+        input[type="text"] {
             padding: 5px;
-            margin-top: 5px;
             text-align: center;
+            font-size: 14px;
         }
         .action-buttons {
             display: flex;
@@ -86,12 +85,21 @@
             bottom: 20px;
             opacity: 1;
         }
+
+        .add-section {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+        .add-section input {
+            flex: 1;
+        }
     </style>
 </head>
 <body>
     <div class="container" id="draggableContainer">
         <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-            <!-- removido onclick inline -->
             <button class="pip-button" id="pipButton">PiP Externo 🖼️</button>
         </div>
         <hr>
@@ -113,12 +121,16 @@
 
             <div style="margin-top:15px;">
                 <button class="restore" id="btnRestaurar">Restaurar</button>
-                <button class="add" id="btnAdicionar">Adicionar</button>
                 <button class="next" id="btnAvancar">Avançar</button>
                 <button class="copy" id="btnCopiar">Copiar</button>
             </div>
 
-            <!-- movi o popup para dentro do queueContent para que apareça também no PiP -->
+            <!-- Seção fixa de adicionar -->
+            <div class="add-section">
+                <input type="text" id="novoNome" placeholder="Digite o nick do funcionário">
+                <button class="add" id="btnAdicionar">Adicionar</button>
+            </div>
+
             <div id="popup">Fila copiada!</div>
         </div>
     </div>
@@ -126,29 +138,23 @@
     <audio id="notificacaoSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
     <script>
-        // --- Estado da fila ---
         let fila = ["Scooty", "saci", "gabes"];
         let filaAnterior = [...fila];
 
-        function salvarEstado() {
-            filaAnterior = [...fila];
-        }
+        function salvarEstado() { filaAnterior = [...fila]; }
 
-        // referência para a janela PiP (se aberta)
         let pipWindow = null;
         const draggableContainer = document.getElementById("draggableContainer");
         const queueContent = document.getElementById('queueContent');
 
-        // Retorna o documento "ativo": se PiP estiver aberto, usa o documento do PiP, senão o document da aba.
         function activeDoc() {
             return (pipWindow && pipWindow.document) ? pipWindow.document : document;
         }
 
-        // Renderiza sempre no documento ativo
         function renderizar() {
             const doc = activeDoc();
             const corpo = doc.getElementById("corpoTabela");
-            if (!corpo) return; // segurança
+            if (!corpo) return;
 
             corpo.innerHTML = "";
             fila.forEach((nome, i) => {
@@ -189,7 +195,6 @@
 
         function editar(i) {
             salvarEstado();
-            // prompt precisa ser chamado no contexto da aba — chamamos no window principal
             let novoNome = prompt("Editar nome do funcionário(a):", fila[i]);
             if (novoNome) fila[i] = novoNome;
             renderizar();
@@ -197,9 +202,11 @@
 
         function adicionar() {
             salvarEstado();
-            let nome = prompt("Digite o nome do funcionário(a):");
-            if (nome) {
-                fila.push(nome);
+            const doc = activeDoc();
+            const input = doc.getElementById("novoNome");
+            if (input && input.value.trim() !== "") {
+                fila.push(input.value.trim());
+                input.value = "";
                 renderizar();
             }
         }
@@ -212,7 +219,6 @@
             }
         }
 
-        // Mostrar popup (no documento fornecido)
         function showPopup(doc) {
             const popup = doc.getElementById("popup");
             if (!popup) return;
@@ -220,36 +226,16 @@
             setTimeout(() => popup.classList.remove("show"), 3000);
         }
 
-        // Copiar texto (usa documento ativo para ler o campo; usa navigator.clipboard do contexto principal)
         function copiar() {
             const doc = activeDoc();
             const textoElem = doc.getElementById("saida");
             const valor = textoElem ? textoElem.value : (":r Ordem da Fila: " + fila.join(" - "));
 
-            // tenta API moderna
             navigator.clipboard.writeText(valor).then(() => {
-                // tocar som no contexto da aba principal (audio está aqui)
                 document.getElementById("notificacaoSound").play().catch(()=>{});
                 showPopup(doc);
-            }).catch(err => {
-                console.warn('Falha na cópia via API moderna. Tentando fallback.', err);
-                try {
-                    if (textoElem) {
-                        // seleciona no documento correto e executa copy via execCommand nesse documento
-                        textoElem.select();
-                        textoElem.focus();
-                        const docExec = doc;
-                        if (docExec.execCommand && docExec.execCommand('copy')) {
-                            document.getElementById("notificacaoSound").play().catch(()=>{});
-                            showPopup(doc);
-                            return;
-                        }
-                    }
-                    throw new Error("Fallback falhou");
-                } catch (fail) {
-                    console.error('Falha no fallback de cópia: ', fail);
-                    alert("A cópia falhou. Seu navegador pode estar bloqueando.");
-                }
+            }).catch(() => {
+                alert("A cópia falhou.");
             });
         }
 
@@ -260,13 +246,9 @@
             renderizar();
         }
 
-        // ---------------------------
-        // Função que (re)liga os handlers no documento passado
-        // ---------------------------
         function bindUI(doc) {
             if (!doc) return;
 
-            // botões principais
             const btnRest = doc.getElementById("btnRestaurar");
             if (btnRest && !btnRest.__bound) {
                 btnRest.addEventListener("click", restaurar);
@@ -291,7 +273,6 @@
                 btnCopy.__bound = true;
             }
 
-            // delegação para os botões dentro da tabela
             const corpo = doc.getElementById("corpoTabela");
             if (corpo && !corpo.__bound) {
                 corpo.addEventListener('click', function (event) {
@@ -312,11 +293,9 @@
             }
         }
 
-        // Toggle PiP externo (Document Picture in Picture)
         function togglePiP() {
-            // pip API experimental
             if (!('documentPictureInPicture' in window)) {
-                alert("O PiP Externo (Document PiP API) não é suportado pelo seu navegador (use o Chrome mais recente).");
+                alert("O PiP Externo não é suportado pelo seu navegador.");
                 return;
             }
 
@@ -338,54 +317,36 @@
                 return;
             }
 
-            // move o queueContent para o documento do PiP
             pipWindow.document.body.appendChild(queueContent);
 
-            // aplica o mesmo estilo
             const style = document.createElement('style');
             style.textContent = document.querySelector('style').textContent;
             pipWindow.document.head.appendChild(style);
 
             draggableContainer.classList.add('hidden-in-main');
 
-            // re-bind no documento do PiP
             bindUI(pipWindow.document);
-
-            // atualizar texto do botão (o botão visível continua sendo o da aba, que está escondido)
             document.getElementById("pipButton").textContent = "Voltar para Aba ↩️";
 
-            // quando a "página" do pip for escondida (fechada), fecharemos o PiP
             pipWindow.addEventListener('pagehide', closePiP);
         }
 
         function closePiP() {
             if (!pipWindow) return;
-
-            // traz de volta para a aba original
             draggableContainer.appendChild(queueContent);
             draggableContainer.classList.remove('hidden-in-main');
-
-            try { pipWindow.close(); } catch (e) { /* ignore */ }
+            try { pipWindow.close(); } catch (e) {}
             pipWindow = null;
 
-            // re-bind no documento principal
             bindUI(document);
-
             document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
-
-            // re-renderiza no documento atual (agora volta para o principal)
             renderizar();
         }
 
-        // liga o botão PiP da aba principal
         document.getElementById("pipButton").addEventListener("click", togglePiP);
 
-        // liga os handlers iniciais no documento principal
         bindUI(document);
-
-        // inicializa a renderização
         renderizar();
-
     </script>
 </body>
 </html>
