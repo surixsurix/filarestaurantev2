@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Fila de Atendimento - Restaurante</title>
+    <link rel="icon" type="image/png" href="https://i.imgur.com/kK3k4kx.png">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -10,20 +11,32 @@
             min-height: 100vh;
             margin: 0;
             padding: 20px;
+            display: flex; /* Permite que o rodapé fixo não cubra o conteúdo */
+            flex-direction: column;
+            align-items: center; /* Centraliza o conteúdo principal */
         }
 
+        /* Estilo padrão do CONTAINER no modo normal */
         .container {
             background: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             width: 420px;
+            max-width: 90%; /* Garante que não ultrapasse a tela em dispositivos menores */
             text-align: center;
-            margin: 20px auto;
+            margin: 20px 0;
         }
 
+        /* Esconde o container principal quando ele está no PiP */
         .container.hidden-in-main {
             display: none !important;
+        }
+        
+        /* Estilo para as logos */
+        .logo-header {
+            width: 150px; /* Tamanho da logo no topo */
+            margin-bottom: 10px;
         }
         
         table {
@@ -56,9 +69,15 @@
         .restore { background: gray; }
         .pip-button { background: orange; }
 
-        input[type="text"] {
+        input {
+            width: 100%;
+            /* CORREÇÃO VISUAL: Aumenta a altura e permite quebra de linha visual, 
+               embora o input[type="text"] não suporte múltiplas linhas reais */
+            height: 40px; 
             padding: 5px;
+            margin-top: 5px;
             text-align: center;
+            box-sizing: border-box; /* Garante que o padding não aumente o width total */
             font-size: 14px;
         }
         .action-buttons {
@@ -67,6 +86,7 @@
             gap: 6px;
         }
 
+        /* Estilo da notificação popup */
         #popup {
             position: fixed;
             bottom: -60px;
@@ -86,21 +106,29 @@
             opacity: 1;
         }
 
-        .add-section {
-            margin-top: 15px;
-            display: flex;
-            justify-content: center;
-            gap: 8px;
+        /* NOVO ESTILO: Rodapé Fixo */
+        .footer-logo {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 10px 0;
+            background-color: #333;
+            text-align: center;
+            z-index: 900; /* Abaixo do popup */
         }
-        .add-section input {
-            flex: 1;
+
+        .footer-logo img {
+            height: 30px; /* Tamanho da logo no rodapé */
         }
     </style>
 </head>
 <body>
     <div class="container" id="draggableContainer">
+        <img src="https://i.imgur.com/kK3k4kx.png" alt="Logo do Restaurante" class="logo-header">
+        
         <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
-            <button class="pip-button" id="pipButton">PiP Externo 🖼️</button>
+            <button class="pip-button" onclick="togglePiP()" id="pipButton">PiP Externo 🖼️</button>
         </div>
         <hr>
         
@@ -120,49 +148,36 @@
             <input type="text" id="saida" readonly>
 
             <div style="margin-top:15px;">
-                <button class="restore" id="btnRestaurar">Restaurar</button>
-                <button class="next" id="btnAvancar">Avançar</button>
-                <!-- O botão Copiar existe aqui, mas será ligado por bindUI -->
-                <button class="copy" id="btnCopiar">Copiar</button>
+                <button class="restore" onclick="restaurar()">Restaurar</button>
+                <button class="add" onclick="adicionar()">Adicionar</button>
+                <button class="next" onclick="avancar()">Avançar</button>
+                <button class="copy" onclick="copiar()">Copiar</button>
             </div>
-
-            <!-- Seção fixa de adicionar -->
-            <div class="add-section">
-                <input type="text" id="novoNome" placeholder="Digite o nick do funcionário">
-                <button class="add" id="btnAdicionar">Adicionar</button>
-            </div>
-
-            <div id="popup">Fila copiada!</div>
         </div>
     </div>
 
-    <!-- não dependemos do elemento de áudio para tocar no PiP; usamos URL e new Audio(window) -->
+    <div id="popup">Fila copiada!</div>
+
+    <div class="footer-logo">
+        <img src="https://i.imgur.com/DgK7zg0.png" alt="Logo Rodapé">
+    </div>
+
     <audio id="notificacaoSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
     <script>
-        // URL do som (usado para tocar tanto na aba quanto no PiP)
-        const NOTIF_SOUND_URL = 'https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg';
-
+        // --- VARIÁVEIS E LÓGICA DA FILA ---
         let fila = ["Scooty", "saci", "gabes"];
         let filaAnterior = [...fila];
 
-        function salvarEstado() { filaAnterior = [...fila]; }
-
-        let pipWindow = null;
-        const draggableContainer = document.getElementById("draggableContainer");
-        const queueContent = document.getElementById('queueContent');
-
-        function activeDoc() {
-            return (pipWindow && pipWindow.document) ? pipWindow.document : document;
+        function salvarEstado() {
+            filaAnterior = [...fila];
         }
 
         function renderizar() {
-            const doc = activeDoc();
-            const corpo = doc.getElementById("corpoTabela");
-            if (!corpo) return;
-
+            const corpo = document.getElementById("corpoTabela");
             corpo.innerHTML = "";
             fila.forEach((nome, i) => {
+                // CORREÇÃO 1: Usando data-attributes para Delegação de Eventos
                 corpo.innerHTML += `
                     <tr>
                         <td>${i+1}</td>
@@ -178,9 +193,8 @@
                     </tr>
                 `;
             });
-
-            const saidaElem = doc.getElementById("saida");
-            if (saidaElem) saidaElem.value = ":r Ordem da Fila: " + fila.join(" - ");
+            // O texto de saída é atualizado aqui
+            document.getElementById("saida").value = ":r Ordem da Fila: " + fila.join(" - ");
         }
 
         function mover(i, dir) {
@@ -200,7 +214,6 @@
 
         function editar(i) {
             salvarEstado();
-            // prompt será exibido no contexto da aba principal (funciona)
             let novoNome = prompt("Editar nome do funcionário(a):", fila[i]);
             if (novoNome) fila[i] = novoNome;
             renderizar();
@@ -208,21 +221,10 @@
 
         function adicionar() {
             salvarEstado();
-            const doc = activeDoc();
-            const input = doc.getElementById("novoNome");
-            // Se input estiver no PiP, pegamos o valor dele; se não existir, pegamos do documento principal
-            if (input && input.value.trim() !== "") {
-                fila.push(input.value.trim());
-                input.value = "";
+            let nome = prompt("Digite o nome do funcionário(a):");
+            if (nome) {
+                fila.push(nome);
                 renderizar();
-            } else {
-                // fallback: pegar do principal
-                const mainInput = document.getElementById("novoNome");
-                if (mainInput && mainInput.value.trim() !== "") {
-                    fila.push(mainInput.value.trim());
-                    mainInput.value = "";
-                    renderizar();
-                }
             }
         }
 
@@ -234,11 +236,41 @@
             }
         }
 
-        function showPopup(doc) {
-            const popup = doc.getElementById("popup");
-            if (!popup) return;
-            popup.classList.add("show");
-            setTimeout(() => popup.classList.remove("show"), 3000);
+        // CORREÇÃO 2: Funçao copiar atualizada para usar fallback no PiP
+        function copiar() {
+            let texto = document.getElementById("saida");
+            
+            // Tenta usar a API moderna navigator.clipboard
+            navigator.clipboard.writeText(texto.value).then(() => {
+                document.getElementById("notificacaoSound").play();
+
+                let popup = document.getElementById("popup");
+                popup.classList.add("show");
+
+                setTimeout(() => {
+                    popup.classList.remove("show");
+                }, 5000);
+            }).catch(err => {
+                // Executa o fallback quando o navigator.clipboard falhar (como no PiP)
+                console.warn('Falha na cópia via API moderna. Usando fallback.', err);
+                try {
+                    texto.select();
+                    texto.focus(); 
+                    document.execCommand("copy");
+                    
+                    // Notificação para o fallback
+                    document.getElementById("notificacaoSound").play();
+                    let popup = document.getElementById("popup");
+                    popup.classList.add("show");
+                    setTimeout(() => {
+                        popup.classList.remove("show");
+                    }, 5000);
+
+                } catch (fail) {
+                    console.error('Falha no fallback de cópia: ', fail);
+                    alert("A cópia falhou. Seu navegador pode estar bloqueando.");
+                }
+            });
         }
 
         function restaurar() {
@@ -248,127 +280,15 @@
             renderizar();
         }
 
-        // ---------------------------------------
-        // bindUI: liga handlers no documento fornecido
-        // - garante handler do botão "Copiar" executado no contexto correto
-        // - re-cria (clona) o botão copiar para garantir que o listener pertença ao documento atual
-        // - delegação do corpo da tabela é criada no documento atual (clonando o tbody)
-        // ---------------------------------------
-        function bindUI(doc) {
-            if (!doc) return;
+        // --- CÓDIGO DO DOCUMENT PICTURE-IN-PICTURE ---
+        let pipWindow = null;
+        const draggableContainer = document.getElementById("draggableContainer");
+        const queueContent = document.getElementById('queueContent');
+        let isPiPActive = false;
 
-            // Restaurar
-            const btnRest = doc.getElementById("btnRestaurar");
-            if (btnRest) {
-                // substitui por clone para evitar múltiplos listeners entre movimentos
-                const btnRestNew = btnRest.cloneNode(true);
-                btnRest.parentNode.replaceChild(btnRestNew, btnRest);
-                btnRestNew.addEventListener("click", restaurar);
-            }
-
-            // Avançar
-            const btnAdv = doc.getElementById("btnAvancar");
-            if (btnAdv) {
-                const btnAdvNew = btnAdv.cloneNode(true);
-                btnAdv.parentNode.replaceChild(btnAdvNew, btnAdv);
-                btnAdvNew.addEventListener("click", avancar);
-            }
-
-            // Adicionar (o botão da seção fixa)
-            const btnAdd = doc.getElementById("btnAdicionar");
-            if (btnAdd) {
-                const btnAddNew = btnAdd.cloneNode(true);
-                btnAdd.parentNode.replaceChild(btnAddNew, btnAdd);
-                btnAddNew.addEventListener("click", adicionar);
-                // Permitir Enter no campo de input para adicionar
-                const inputNovo = doc.getElementById("novoNome");
-                if (inputNovo) {
-                    inputNovo.addEventListener("keypress", (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            adicionar();
-                        }
-                    });
-                }
-            }
-
-            // Copiar -> aqui é crítico: criamos o listener no documento atual (para usar win.navigator.clipboard)
-            const btnCopy = doc.getElementById("btnCopiar");
-            if (btnCopy) {
-                const btnCopyNew = btnCopy.cloneNode(true);
-                btnCopy.parentNode.replaceChild(btnCopyNew, btnCopy);
-
-                btnCopyNew.addEventListener("click", function (e) {
-                    const textoElem = doc.getElementById("saida");
-                    const valor = textoElem ? textoElem.value : (":r Ordem da Fila: " + fila.join(" - "));
-                    const win = (doc.defaultView) ? doc.defaultView : window;
-
-                    // Primeiro tenta a API moderna no próprio window do documento
-                    if (win && win.navigator && win.navigator.clipboard && typeof win.navigator.clipboard.writeText === 'function') {
-                        win.navigator.clipboard.writeText(valor).then(() => {
-                            // tocar som usando o Audio do próprio window (garante que o play é permitido como gesto do usuário)
-                            try {
-                                const audio = new win.Audio(NOTIF_SOUND_URL);
-                                audio.play().catch(()=>{});
-                            } catch(err) {}
-                            showPopup(doc);
-                        }).catch(err => {
-                            // fallback: tenta selecionar e execCommand('copy') no mesmo documento
-                            fallbackCopyExec();
-                        });
-                    } else {
-                        fallbackCopyExec();
-                    }
-
-                    function fallbackCopyExec() {
-                        try {
-                            if (textoElem) {
-                                // seleciona dentro do documento correto
-                                textoElem.focus();
-                                textoElem.select();
-                                // execCommand deve existir no documento
-                                if (typeof doc.execCommand === 'function' && doc.execCommand('copy')) {
-                                    try {
-                                        const audio = new win.Audio(NOTIF_SOUND_URL);
-                                        audio.play().catch(()=>{});
-                                    } catch(err) {}
-                                    showPopup(doc);
-                                    return;
-                                }
-                            }
-                        } catch (e) { /* ignore */ }
-                        alert("A cópia falhou. Seu navegador pode estar bloqueando.");
-                    }
-                });
-            }
-
-            // Delegação para botões dentro da tabela: vamos clonar o tbody e criar listener no documento atual
-            const corpo = doc.getElementById("corpoTabela");
-            if (corpo) {
-                const corpoNew = corpo.cloneNode(true);
-                corpo.parentNode.replaceChild(corpoNew, corpo);
-
-                corpoNew.addEventListener('click', function (event) {
-                    const target = event.target;
-                    if (target.matches('[data-action]')) {
-                        const action = target.getAttribute('data-action');
-                        const index = parseInt(target.getAttribute('data-index'), 10);
-                        if (action === 'move') {
-                            mover(index, parseInt(target.getAttribute('data-dir'), 10));
-                        } else if (action === 'edit') {
-                            editar(index);
-                        } else if (action === 'remove') {
-                            remover(index);
-                        }
-                    }
-                });
-            }
-        }
-
-        // Toggle PiP externo (Document Picture in Picture)
         function togglePiP() {
             if (!('documentPictureInPicture' in window)) {
-                alert("O PiP Externo não é suportado pelo seu navegador (use o Chrome/Edge compatível).");
+                alert("O PiP Externo (Document PiP API) não é suportado pelo seu navegador (use o Chrome mais recente).");
                 return;
             }
 
@@ -390,51 +310,58 @@
                 return;
             }
 
-            // move o conteúdo (queueContent) para o documento do PiP
             pipWindow.document.body.appendChild(queueContent);
 
-            // aplica os mesmos estilos no documento do PiP
             const style = document.createElement('style');
             style.textContent = document.querySelector('style').textContent;
             pipWindow.document.head.appendChild(style);
 
             draggableContainer.classList.add('hidden-in-main');
-
-            // ligar handlers no documento do PiP
-            bindUI(pipWindow.document);
-
-            // atualizar texto do botão na aba principal (mesmo que o botão esteja escondido)
+            
+            isPiPActive = true;
             document.getElementById("pipButton").textContent = "Voltar para Aba ↩️";
 
-            // fechar corretamente quando o PiP for escondido/fechado
             pipWindow.addEventListener('pagehide', closePiP);
         }
 
         function closePiP() {
             if (!pipWindow) return;
 
-            // volta o conteúdo para a aba principal
             draggableContainer.appendChild(queueContent);
+            
             draggableContainer.classList.remove('hidden-in-main');
 
-            try { pipWindow.close(); } catch (e) { /* ignore */ }
+            pipWindow.close();
             pipWindow = null;
 
-            // liga handlers no documento principal
-            bindUI(document);
-
+            isPiPActive = false;
             document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
-
+            
             renderizar();
         }
 
-        // liga o botão PiP da aba principal
-        document.getElementById("pipButton").addEventListener("click", togglePiP);
+        // CORREÇÃO 1: DELEGAÇÃO DE EVENTOS para botões da tabela
+        const corpoTabela = document.getElementById("corpoTabela");
 
-        // liga handlers iniciais no documento principal
-        bindUI(document);
+        corpoTabela.addEventListener('click', (event) => {
+            const target = event.target;
+            
+            if (target.matches('[data-action]')) {
+                const action = target.getAttribute('data-action');
+                const index = parseInt(target.getAttribute('data-index'));
 
-        // render inicial
+                if (action === 'move') {
+                    const dir = parseInt(target.getAttribute('data-dir'));
+                    mover(index, dir);
+                } else if (action === 'edit') {
+                    editar(index);
+                } else if (action === 'remove') {
+                    remover(index);
+                }
+            }
+        });
+
+        // Inicializa a renderização da fila
         renderizar();
     </script>
 </body>
