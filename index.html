@@ -122,6 +122,7 @@
             <div style="margin-top:15px;">
                 <button class="restore" id="btnRestaurar">Restaurar</button>
                 <button class="next" id="btnAvancar">Avançar</button>
+                <!-- O botão Copiar existe aqui, mas será ligado por bindUI -->
                 <button class="copy" id="btnCopiar">Copiar</button>
             </div>
 
@@ -135,9 +136,13 @@
         </div>
     </div>
 
+    <!-- não dependemos do elemento de áudio para tocar no PiP; usamos URL e new Audio(window) -->
     <audio id="notificacaoSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
     <script>
+        // URL do som (usado para tocar tanto na aba quanto no PiP)
+        const NOTIF_SOUND_URL = 'https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg';
+
         let fila = ["Scooty", "saci", "gabes"];
         let filaAnterior = [...fila];
 
@@ -195,6 +200,7 @@
 
         function editar(i) {
             salvarEstado();
+            // prompt será exibido no contexto da aba principal (funciona)
             let novoNome = prompt("Editar nome do funcionário(a):", fila[i]);
             if (novoNome) fila[i] = novoNome;
             renderizar();
@@ -204,10 +210,19 @@
             salvarEstado();
             const doc = activeDoc();
             const input = doc.getElementById("novoNome");
+            // Se input estiver no PiP, pegamos o valor dele; se não existir, pegamos do documento principal
             if (input && input.value.trim() !== "") {
                 fila.push(input.value.trim());
                 input.value = "";
                 renderizar();
+            } else {
+                // fallback: pegar do principal
+                const mainInput = document.getElementById("novoNome");
+                if (mainInput && mainInput.value.trim() !== "") {
+                    fila.push(mainInput.value.trim());
+                    mainInput.value = "";
+                    renderizar();
+                }
             }
         }
 
@@ -226,19 +241,6 @@
             setTimeout(() => popup.classList.remove("show"), 3000);
         }
 
-        function copiar() {
-            const doc = activeDoc();
-            const textoElem = doc.getElementById("saida");
-            const valor = textoElem ? textoElem.value : (":r Ordem da Fila: " + fila.join(" - "));
-
-            navigator.clipboard.writeText(valor).then(() => {
-                document.getElementById("notificacaoSound").play().catch(()=>{});
-                showPopup(doc);
-            }).catch(() => {
-                alert("A cópia falhou.");
-            });
-        }
-
         function restaurar() {
             let temp = [...fila];
             fila = [...filaAnterior];
@@ -246,36 +248,107 @@
             renderizar();
         }
 
+        // ---------------------------------------
+        // bindUI: liga handlers no documento fornecido
+        // - garante handler do botão "Copiar" executado no contexto correto
+        // - re-cria (clona) o botão copiar para garantir que o listener pertença ao documento atual
+        // - delegação do corpo da tabela é criada no documento atual (clonando o tbody)
+        // ---------------------------------------
         function bindUI(doc) {
             if (!doc) return;
 
+            // Restaurar
             const btnRest = doc.getElementById("btnRestaurar");
-            if (btnRest && !btnRest.__bound) {
-                btnRest.addEventListener("click", restaurar);
-                btnRest.__bound = true;
+            if (btnRest) {
+                // substitui por clone para evitar múltiplos listeners entre movimentos
+                const btnRestNew = btnRest.cloneNode(true);
+                btnRest.parentNode.replaceChild(btnRestNew, btnRest);
+                btnRestNew.addEventListener("click", restaurar);
             }
 
-            const btnAdd = doc.getElementById("btnAdicionar");
-            if (btnAdd && !btnAdd.__bound) {
-                btnAdd.addEventListener("click", adicionar);
-                btnAdd.__bound = true;
-            }
-
+            // Avançar
             const btnAdv = doc.getElementById("btnAvancar");
-            if (btnAdv && !btnAdv.__bound) {
-                btnAdv.addEventListener("click", avancar);
-                btnAdv.__bound = true;
+            if (btnAdv) {
+                const btnAdvNew = btnAdv.cloneNode(true);
+                btnAdv.parentNode.replaceChild(btnAdvNew, btnAdv);
+                btnAdvNew.addEventListener("click", avancar);
             }
 
+            // Adicionar (o botão da seção fixa)
+            const btnAdd = doc.getElementById("btnAdicionar");
+            if (btnAdd) {
+                const btnAddNew = btnAdd.cloneNode(true);
+                btnAdd.parentNode.replaceChild(btnAddNew, btnAdd);
+                btnAddNew.addEventListener("click", adicionar);
+                // Permitir Enter no campo de input para adicionar
+                const inputNovo = doc.getElementById("novoNome");
+                if (inputNovo) {
+                    inputNovo.addEventListener("keypress", (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            adicionar();
+                        }
+                    });
+                }
+            }
+
+            // Copiar -> aqui é crítico: criamos o listener no documento atual (para usar win.navigator.clipboard)
             const btnCopy = doc.getElementById("btnCopiar");
-            if (btnCopy && !btnCopy.__bound) {
-                btnCopy.addEventListener("click", copiar);
-                btnCopy.__bound = true;
+            if (btnCopy) {
+                const btnCopyNew = btnCopy.cloneNode(true);
+                btnCopy.parentNode.replaceChild(btnCopyNew, btnCopy);
+
+                btnCopyNew.addEventListener("click", function (e) {
+                    const textoElem = doc.getElementById("saida");
+                    const valor = textoElem ? textoElem.value : (":r Ordem da Fila: " + fila.join(" - "));
+                    const win = (doc.defaultView) ? doc.defaultView : window;
+
+                    // Primeiro tenta a API moderna no próprio window do documento
+                    if (win && win.navigator && win.navigator.clipboard && typeof win.navigator.clipboard.writeText === 'function') {
+                        win.navigator.clipboard.writeText(valor).then(() => {
+                            // tocar som usando o Audio do próprio window (garante que o play é permitido como gesto do usuário)
+                            try {
+                                const audio = new win.Audio(NOTIF_SOUND_URL);
+                                audio.play().catch(()=>{});
+                            } catch(err) {}
+                            showPopup(doc);
+                        }).catch(err => {
+                            // fallback: tenta selecionar e execCommand('copy') no mesmo documento
+                            fallbackCopyExec();
+                        });
+                    } else {
+                        fallbackCopyExec();
+                    }
+
+                    function fallbackCopyExec() {
+                        try {
+                            if (textoElem) {
+                                // seleciona dentro do documento correto
+                                textoElem.focus();
+                                textoElem.select();
+                                // execCommand deve existir no documento
+                                if (typeof doc.execCommand === 'function' && doc.execCommand('copy')) {
+                                    try {
+                                        const audio = new win.Audio(NOTIF_SOUND_URL);
+                                        audio.play().catch(()=>{});
+                                    } catch(err) {}
+                                    showPopup(doc);
+                                    return;
+                                }
+                            }
+                        } catch (e) { /* ignore */ }
+                        alert("A cópia falhou. Seu navegador pode estar bloqueando.");
+                    }
+                });
             }
 
+            // Delegação para botões dentro da tabela: vamos clonar o tbody e criar listener no documento atual
             const corpo = doc.getElementById("corpoTabela");
-            if (corpo && !corpo.__bound) {
-                corpo.addEventListener('click', function (event) {
+            if (corpo) {
+                const corpoNew = corpo.cloneNode(true);
+                corpo.parentNode.replaceChild(corpoNew, corpo);
+
+                corpoNew.addEventListener('click', function (event) {
                     const target = event.target;
                     if (target.matches('[data-action]')) {
                         const action = target.getAttribute('data-action');
@@ -289,13 +362,13 @@
                         }
                     }
                 });
-                corpo.__bound = true;
             }
         }
 
+        // Toggle PiP externo (Document Picture in Picture)
         function togglePiP() {
             if (!('documentPictureInPicture' in window)) {
-                alert("O PiP Externo não é suportado pelo seu navegador.");
+                alert("O PiP Externo não é suportado pelo seu navegador (use o Chrome/Edge compatível).");
                 return;
             }
 
@@ -317,35 +390,51 @@
                 return;
             }
 
+            // move o conteúdo (queueContent) para o documento do PiP
             pipWindow.document.body.appendChild(queueContent);
 
+            // aplica os mesmos estilos no documento do PiP
             const style = document.createElement('style');
             style.textContent = document.querySelector('style').textContent;
             pipWindow.document.head.appendChild(style);
 
             draggableContainer.classList.add('hidden-in-main');
 
+            // ligar handlers no documento do PiP
             bindUI(pipWindow.document);
+
+            // atualizar texto do botão na aba principal (mesmo que o botão esteja escondido)
             document.getElementById("pipButton").textContent = "Voltar para Aba ↩️";
 
+            // fechar corretamente quando o PiP for escondido/fechado
             pipWindow.addEventListener('pagehide', closePiP);
         }
 
         function closePiP() {
             if (!pipWindow) return;
+
+            // volta o conteúdo para a aba principal
             draggableContainer.appendChild(queueContent);
             draggableContainer.classList.remove('hidden-in-main');
-            try { pipWindow.close(); } catch (e) {}
+
+            try { pipWindow.close(); } catch (e) { /* ignore */ }
             pipWindow = null;
 
+            // liga handlers no documento principal
             bindUI(document);
+
             document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
+
             renderizar();
         }
 
+        // liga o botão PiP da aba principal
         document.getElementById("pipButton").addEventListener("click", togglePiP);
 
+        // liga handlers iniciais no documento principal
         bindUI(document);
+
+        // render inicial
         renderizar();
     </script>
 </body>
