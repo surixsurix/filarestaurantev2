@@ -1,213 +1,298 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Fila de Atendimento - Restaurante</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-    .container {
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      width: 420px;
-      text-align: center;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 10px;
-    }
-    th, td {
-      border-bottom: 1px solid #ddd;
-      text-align: center;
-      padding: 8px;
-    }
-    button {
-      border: none;
-      padding: 6px 10px;
-      margin: 2px;
-      border-radius: 6px;
-      cursor: pointer;
-      color: white;
-      font-size: 16px;
-    }
-    .up { background: blue; font-size: 20px; font-weight: bold; }
-    .down { background: blue; font-size: 20px; font-weight: bold; }
-    .edit { background: dodgerblue; font-size: 20px; }
-    .delete { background: red; font-size: 20px; }
-    .add { background: blue; }
-    .next { background: red; }
-    .copy { background: green; }
-    .restore { background: gray; }
-    input {
-      width: 100%;
-      padding: 5px;
-      margin-top: 5px;
-      text-align: center;
-    }
+    <meta charset="UTF-8">
+    <title>Fila de Atendimento - Restaurante</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh; /* Para garantir espaço para rolar */
+            margin: 0;
+            padding: 20px;
+        }
 
-    .action-buttons {
-      display: flex;
-      justify-content: center;
-      gap: 6px;
-    }
+        /* Estilo para quando o CONTAINER estiver fixo/flutuante */
+        .container.floating {
+            position: fixed; /* Fica fixo na tela, não rola */
+            top: 50px; /* Posição inicial flutuante */
+            right: 50px;
+            width: 350px; /* Largura reduzida para balão */
+            cursor: grab; /* Indica que pode ser arrastado */
+            margin: 0; /* Remove margens de centralização */
+            z-index: 999; /* Garante que fique acima de outros elementos */
+        }
 
-    /* Estilo da notificação */
-    #popup {
-      position: fixed;
-      bottom: -60px; /* começa escondido */
-      right: 20px;
-      background: #323232;
-      color: white;
-      padding: 12px 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      opacity: 0;
-      transition: all 0.6s ease;
-      font-size: 14px;
-      z-index: 1000;
-    }
+        /* Estilo padrão do CONTAINER no modo fixo (não flutuante) */
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            width: 420px;
+            text-align: center;
+            margin: 20px auto; /* Centraliza no modo normal */
+        }
 
-    /* Quando ativo */
-    #popup.show {
-      bottom: 20px;
-      opacity: 1;
-    }
-  </style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        th, td {
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+            padding: 8px;
+        }
+        button {
+            border: none;
+            padding: 6px 10px;
+            margin: 2px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: white;
+            font-size: 16px;
+        }
+        .up { background: blue; font-size: 20px; font-weight: bold; }
+        .down { background: blue; font-size: 20px; font-weight: bold; }
+        .edit { background: dodgerblue; font-size: 20px; }
+        .delete { background: red; font-size: 20px; }
+        .add { background: blue; }
+        .next { background: red; }
+        .copy { background: green; }
+        .restore { background: gray; }
+        .float-button { background: purple; } /* Novo botão para flutuar */
+
+        input {
+            width: 100%;
+            padding: 5px;
+            margin-top: 5px;
+            text-align: center;
+        }
+        .action-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        /* Estilo da notificação popup */
+        #popup {
+            position: fixed;
+            bottom: -60px;
+            right: 20px;
+            background: #323232;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            opacity: 0;
+            transition: all 0.6s ease;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        #popup.show {
+            bottom: 20px;
+            opacity: 1;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h2>Fila de Atendimento - Restaurante</h2>
-    <table id="tabela">
-      <thead>
-        <tr>
-          <th>Ordem</th>
-          <th>Funcionário(a)</th>
-          <th>Ação</th>
-        </tr>
-      </thead>
-      <tbody id="corpoTabela"></tbody>
-    </table>
+    <div class="container" id="draggableContainer">
+        <button class="float-button" onclick="toggleFloat()" id="floatButton">Flutuar 🎈</button>
+        <hr>
+        <h2>Fila de Atendimento - Restaurante</h2>
+        <table id="tabela">
+            <thead>
+                <tr>
+                    <th>Ordem</th>
+                    <th>Funcionário(a)</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody id="corpoTabela"></tbody>
+        </table>
 
-    <input type="text" id="saida" readonly>
+        <input type="text" id="saida" readonly>
 
-    <div style="margin-top:15px;">
-      <button class="restore" onclick="restaurar()">Restaurar</button>
-      <button class="add" onclick="adicionar()">Adicionar</button>
-      <button class="next" onclick="avancar()">Avançar</button>
-      <button class="copy" onclick="copiar()">Copiar</button>
+        <div style="margin-top:15px;">
+            <button class="restore" onclick="restaurar()">Restaurar</button>
+            <button class="add" onclick="adicionar()">Adicionar</button>
+            <button class="next" onclick="avancar()">Avançar</button>
+            <button class="copy" onclick="copiar()">Copiar</button>
+        </div>
     </div>
-  </div>
 
-  <!-- Notificação popup -->
-  <div id="popup">Fila copiada!</div>
+    <div id="popup">Fila copiada!</div>
 
-  <!-- Som de notificação -->
-  <audio id="notificacaoSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
+    <audio id="notificacaoSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
-  <script>
-    let fila = ["Scooty", "saci", "gabes"];
-    let filaAnterior = [...fila]; // guarda o estado anterior
+    <script>
+        // --- VARIÁVEIS E LÓGICA DA FILA ---
+        let fila = ["Scooty", "saci", "gabes"];
+        let filaAnterior = [...fila];
 
-    function salvarEstado() {
-      filaAnterior = [...fila]; // salva antes de qualquer alteração
-    }
+        function salvarEstado() {
+            filaAnterior = [...fila];
+        }
 
-    function renderizar() {
-      const corpo = document.getElementById("corpoTabela");
-      corpo.innerHTML = "";
-      fila.forEach((nome, i) => {
-        corpo.innerHTML += `
-          <tr>
-            <td>${i+1}</td>
-            <td>${nome}</td>
-            <td>
-              <div class="action-buttons">
-                <button class="up" onclick="mover(${i}, -1)">⬆️</button>
-                <button class="down" onclick="mover(${i}, 1)">⬇️</button>
-                <button class="edit" onclick="editar(${i})">✏️</button>
-                <button class="delete" onclick="remover(${i})">❌</button>
-              </div>
-            </td>
-          </tr>
-        `;
-      });
-      document.getElementById("saida").value = ":r Ordem da Fila: " + fila.join(" - ");
-    }
+        function renderizar() {
+            const corpo = document.getElementById("corpoTabela");
+            corpo.innerHTML = "";
+            fila.forEach((nome, i) => {
+                corpo.innerHTML += `
+                    <tr>
+                        <td>${i+1}</td>
+                        <td>${nome}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="up" onclick="mover(${i}, -1)">⬆️</button>
+                                <button class="down" onclick="mover(${i}, 1)">⬇️</button>
+                                <button class="edit" onclick="editar(${i})">✏️</button>
+                                <button class="delete" onclick="remover(${i})">❌</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById("saida").value = ":r Ordem da Fila: " + fila.join(" - ");
+        }
 
-    function mover(i, dir) {
-      salvarEstado();
-      let novo = i + dir;
-      if (novo >= 0 && novo < fila.length) {
-        [fila[i], fila[novo]] = [fila[novo], fila[i]];
+        function mover(i, dir) {
+            salvarEstado();
+            let novo = i + dir;
+            if (novo >= 0 && novo < fila.length) {
+                [fila[i], fila[novo]] = [fila[novo], fila[i]];
+                renderizar();
+            }
+        }
+
+        function remover(i) {
+            salvarEstado();
+            fila.splice(i, 1);
+            renderizar();
+        }
+
+        function editar(i) {
+            salvarEstado();
+            let novoNome = prompt("Editar nome do funcionário(a):", fila[i]);
+            if (novoNome) fila[i] = novoNome;
+            renderizar();
+        }
+
+        function adicionar() {
+            salvarEstado();
+            let nome = prompt("Digite o nome do funcionário(a):");
+            if (nome) {
+                fila.push(nome);
+                renderizar();
+            }
+        }
+
+        function avancar() {
+            salvarEstado();
+            if (fila.length > 0) {
+                fila.push(fila.shift());
+                renderizar();
+            }
+        }
+
+        function copiar() {
+            let texto = document.getElementById("saida");
+            texto.select();
+            document.execCommand("copy");
+
+            document.getElementById("notificacaoSound").play();
+
+            let popup = document.getElementById("popup");
+            popup.classList.add("show");
+
+            setTimeout(() => {
+                popup.classList.remove("show");
+            }, 5000);
+        }
+
+        function restaurar() {
+            let temp = [...fila];
+            fila = [...filaAnterior];
+            filaAnterior = [...temp];
+            renderizar();
+        }
+
+        // --- CÓDIGO DO BALÃO FLUTUANTE/MÓVEL (NOVO) ---
+
+        const draggableContainer = document.getElementById("draggableContainer");
+        const floatButton = document.getElementById("floatButton");
+        let isFloating = false;
+
+        // 1. Alterna entre modo normal e flutuante
+        function toggleFloat() {
+            isFloating = !isFloating;
+            draggableContainer.classList.toggle("floating", isFloating);
+            
+            if (isFloating) {
+                floatButton.textContent = "Fixar no Centro 📌";
+                // Inicia o mecanismo de arrastar
+                dragElement(draggableContainer);
+            } else {
+                floatButton.textContent = "Flutuar 🎈";
+                // Limpa o posicionamento fixo para voltar ao CSS de centralização
+                draggableContainer.style.top = null;
+                draggableContainer.style.left = null;
+                draggableContainer.style.right = null;
+                draggableContainer.style.bottom = null;
+            }
+        }
+
+        // 2. Função para arrastar o elemento
+        function dragElement(elmnt) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            
+            // Inicia o arrasto ao pressionar o mouse no próprio balão
+            elmnt.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                e = e || window.event;
+                e.preventDefault(); 
+                
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                // Só move se estiver no modo flutuante
+                if (!isFloating) {
+                    closeDragElement();
+                    return;
+                }
+                
+                e = e || window.event;
+                e.preventDefault();
+                
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                
+                // Define a nova posição do elemento
+                elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+                elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+                
+                // Remove as propriedades right/bottom para evitar conflitos
+                elmnt.style.right = null;
+                elmnt.style.bottom = null;
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        // Inicializa a renderização da fila
         renderizar();
-      }
-    }
-
-    function remover(i) {
-      salvarEstado();
-      fila.splice(i, 1);
-      renderizar();
-    }
-
-    function editar(i) {
-      salvarEstado();
-      let novoNome = prompt("Editar nome do funcionário(a):", fila[i]);
-      if (novoNome) fila[i] = novoNome;
-      renderizar();
-    }
-
-    function adicionar() {
-      salvarEstado();
-      let nome = prompt("Digite o nome do funcionário(a):");
-      if (nome) {
-        fila.push(nome);
-        renderizar();
-      }
-    }
-
-    function avancar() {
-      salvarEstado();
-      if (fila.length > 0) {
-        fila.push(fila.shift());
-        renderizar();
-      }
-    }
-
-    function copiar() {
-      let texto = document.getElementById("saida");
-      texto.select();
-      document.execCommand("copy");
-
-      // Som de notificação
-      document.getElementById("notificacaoSound").play();
-
-      // Mostra popup
-      let popup = document.getElementById("popup");
-      popup.classList.add("show");
-
-      // Esconde depois de 5s
-      setTimeout(() => {
-        popup.classList.remove("show");
-      }, 5000);
-    }
-
-    function restaurar() {
-      let temp = [...fila];
-      fila = [...filaAnterior]; // volta ao estado anterior
-      filaAnterior = [...temp]; // permite desfazer/alternar
-      renderizar();
-    }
-
-    renderizar();
-  </script>
+    </script>
 </body>
 </html>
