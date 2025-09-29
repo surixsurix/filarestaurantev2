@@ -47,10 +47,12 @@
             color: white;
             font-size: 16px;
         }
+        /* Os botões da tabela foram atualizados para não usar 'onclick' direto */
         .up { background: blue; font-size: 20px; font-weight: bold; }
         .down { background: blue; font-size: 20px; font-weight: bold; }
         .edit { background: dodgerblue; font-size: 20px; }
         .delete { background: red; font-size: 20px; }
+
         .add { background: blue; }
         .next { background: red; }
         .copy { background: green; }
@@ -138,16 +140,17 @@
             const corpo = document.getElementById("corpoTabela");
             corpo.innerHTML = "";
             fila.forEach((nome, i) => {
+                // ATENÇÃO: Os atributos 'onclick' foram removidos e substituídos por 'data-action' e 'data-index'
                 corpo.innerHTML += `
                     <tr>
                         <td>${i+1}</td>
                         <td>${nome}</td>
                         <td>
                             <div class="action-buttons">
-                                <button class="up" onclick="mover(${i}, -1)">⬆️</button>
-                                <button class="down" onclick="mover(${i}, 1)">⬇️</button>
-                                <button class="edit" onclick="editar(${i})">✏️</button>
-                                <button class="delete" onclick="remover(${i})">❌</button>
+                                <button class="up" data-action="move" data-dir="-1" data-index="${i}">⬆️</button>
+                                <button class="down" data-action="move" data-dir="1" data-index="${i}">⬇️</button>
+                                <button class="edit" data-action="edit" data-index="${i}">✏️</button>
+                                <button class="delete" data-action="remove" data-index="${i}">❌</button>
                             </div>
                         </td>
                     </tr>
@@ -198,7 +201,6 @@
         function copiar() {
             let texto = document.getElementById("saida");
             
-            // Usando a API moderna Clipboard
             navigator.clipboard.writeText(texto.value).then(() => {
                 document.getElementById("notificacaoSound").play();
 
@@ -210,7 +212,6 @@
                 }, 5000);
             }).catch(err => {
                 console.error('Erro ao copiar: ', err);
-                // Fallback para document.execCommand (obsoleto, mas para compatibilidade)
                 try {
                     texto.select();
                     document.execCommand("copy");
@@ -227,9 +228,7 @@
             renderizar();
         }
 
-        // O código do balão flutuante/móvel (toggleFloat e dragElement) foi removido.
-
-        // --- CÓDIGO DO DOCUMENT PICTURE-IN-PICTURE ---
+        // --- CÓDIGO DO DOCUMENT PICTURE-IN-PICTURE (inalterado) ---
         let pipWindow = null;
         const draggableContainer = document.getElementById("draggableContainer");
         const queueContent = document.getElementById('queueContent');
@@ -251,7 +250,6 @@
         }
 
         async function openPiP() {
-            // 1. Tenta abrir a janela PiP
             try {
                 // Define um tamanho inicial para a janela PiP
                 pipWindow = await documentPictureInPicture.requestWindow({
@@ -263,44 +261,68 @@
                 return;
             }
 
-            // 2. Transfere o conteúdo (a fila) para a nova janela
+            // Transfere o conteúdo (a fila) para a nova janela
             pipWindow.document.body.appendChild(queueContent);
 
-            // 3. Copia os estilos CSS para que o conteúdo não fique sem formatação
+            // Copia os estilos CSS para que o conteúdo não fique sem formatação
             const style = document.createElement('style');
             style.textContent = document.querySelector('style').textContent;
             pipWindow.document.head.appendChild(style);
 
-            // 4. Marca o container principal como "escondido" (pois o conteúdo está no PiP)
+            // Marca o container principal como "escondido" (pois o conteúdo está no PiP)
             draggableContainer.classList.add('hidden-in-main');
             
-            // 5. Atualiza o estado e o botão
+            // Atualiza o estado e o botão
             isPiPActive = true;
             document.getElementById("pipButton").textContent = "Voltar para Aba ↩️";
 
-            // 6. Configura o que fazer quando o usuário fecha a janela PiP
+            // Configura o que fazer quando o usuário fecha a janela PiP
             pipWindow.addEventListener('pagehide', closePiP);
         }
 
         function closePiP() {
             if (!pipWindow) return;
 
-            // 1. Move o conteúdo de volta para o container original
+            // Move o conteúdo de volta para o container original
             draggableContainer.appendChild(queueContent);
             
-            // 2. Remove a marcação de "escondido"
+            // Remove a marcação de "escondido"
             draggableContainer.classList.remove('hidden-in-main');
 
-            // 3. Fecha a janela PiP (caso não tenha sido fechada pelo usuário)
+            // Fecha a janela PiP (caso não tenha sido fechada pelo usuário)
             pipWindow.close();
             pipWindow = null;
 
-            // 4. Atualiza o estado e o botão
+            // Atualiza o estado e o botão
             isPiPActive = false;
             document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
             
-            renderizar(); // Força a renderização para garantir que todos os eventos estejam ligados corretamente.
+            renderizar(); // Força a renderização
         }
+
+        // --- DELEGAÇÃO DE EVENTOS: SOLUÇÃO PARA O BUG NO PIP ---
+        const corpoTabela = document.getElementById("corpoTabela");
+
+        // Adiciona um único listener no corpo da tabela que funciona mesmo no PiP
+        corpoTabela.addEventListener('click', (event) => {
+            const target = event.target;
+            
+            // Verifica se o elemento clicado é um botão de ação
+            if (target.matches('[data-action]')) {
+                const action = target.getAttribute('data-action');
+                // Pega o índice do funcionário na fila
+                const index = parseInt(target.getAttribute('data-index'));
+
+                if (action === 'move') {
+                    const dir = parseInt(target.getAttribute('data-dir'));
+                    mover(index, dir);
+                } else if (action === 'edit') {
+                    editar(index);
+                } else if (action === 'remove') {
+                    remover(index);
+                }
+            }
+        });
 
         // Inicializa a renderização da fila
         renderizar();
