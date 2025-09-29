@@ -7,23 +7,25 @@
         body {
             font-family: Arial, sans-serif;
             background: #f5f5f5;
-            min-height: 100vh; /* Para garantir espaço para rolar */
+            min-height: 100vh;
             margin: 0;
             padding: 20px;
         }
 
-        /* Estilo para quando o CONTAINER estiver fixo/flutuante */
+        /* Estilo para quando o CONTAINER estiver fixo/flutuante (DENTRO DA ABA) */
         .container.floating {
-            position: fixed; /* Fica fixo na tela, não rola */
-            top: 50px; /* Posição inicial flutuante */
+            position: fixed;
+            top: 50px;
             right: 50px;
-            width: 350px; /* Largura reduzida para balão */
-            cursor: grab; /* Indica que pode ser arrastado */
-            margin: 0; /* Remove margens de centralização */
-            z-index: 999; /* Garante que fique acima de outros elementos */
+            width: 350px;
+            cursor: grab;
+            margin: 0;
+            z-index: 999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transition: width 0.3s; /* Adiciona transição para o resize */
         }
 
-        /* Estilo padrão do CONTAINER no modo fixo (não flutuante) */
+        /* Estilo padrão do CONTAINER no modo normal */
         .container {
             background: white;
             padding: 20px;
@@ -31,9 +33,14 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             width: 420px;
             text-align: center;
-            margin: 20px auto; /* Centraliza no modo normal */
+            margin: 20px auto;
         }
 
+        /* Esconde o container principal quando ele está no PiP */
+        .container.hidden-in-main {
+            display: none !important;
+        }
+        
         table {
             width: 100%;
             border-collapse: collapse;
@@ -61,7 +68,8 @@
         .next { background: red; }
         .copy { background: green; }
         .restore { background: gray; }
-        .float-button { background: purple; } /* Novo botão para flutuar */
+        .float-button { background: purple; }
+        .pip-button { background: orange; } /* Novo botão PiP */
 
         input {
             width: 100%;
@@ -98,27 +106,33 @@
 </head>
 <body>
     <div class="container" id="draggableContainer">
-        <button class="float-button" onclick="toggleFloat()" id="floatButton">Flutuar 🎈</button>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <button class="float-button" onclick="toggleFloat()" id="floatButton">Fixar/Mover 📌</button>
+            <button class="pip-button" onclick="togglePiP()" id="pipButton">PiP Externo 🖼️</button>
+        </div>
         <hr>
-        <h2>Fila de Atendimento - Restaurante</h2>
-        <table id="tabela">
-            <thead>
-                <tr>
-                    <th>Ordem</th>
-                    <th>Funcionário(a)</th>
-                    <th>Ação</th>
-                </tr>
-            </thead>
-            <tbody id="corpoTabela"></tbody>
-        </table>
+        
+        <div id="queueContent">
+            <h2>Fila de Atendimento - Restaurante</h2>
+            <table id="tabela">
+                <thead>
+                    <tr>
+                        <th>Ordem</th>
+                        <th>Funcionário(a)</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody id="corpoTabela"></tbody>
+            </table>
 
-        <input type="text" id="saida" readonly>
+            <input type="text" id="saida" readonly>
 
-        <div style="margin-top:15px;">
-            <button class="restore" onclick="restaurar()">Restaurar</button>
-            <button class="add" onclick="adicionar()">Adicionar</button>
-            <button class="next" onclick="avancar()">Avançar</button>
-            <button class="copy" onclick="copiar()">Copiar</button>
+            <div style="margin-top:15px;">
+                <button class="restore" onclick="restaurar()">Restaurar</button>
+                <button class="add" onclick="adicionar()">Adicionar</button>
+                <button class="next" onclick="avancar()">Avançar</button>
+                <button class="copy" onclick="copiar()">Copiar</button>
+            </div>
         </div>
     </div>
 
@@ -218,24 +232,27 @@
             renderizar();
         }
 
-        // --- CÓDIGO DO BALÃO FLUTUANTE/MÓVEL (NOVO) ---
+        // --- CÓDIGO DO BALÃO FLUTUANTE/MÓVEL (DENTRO DA ABA) ---
 
         const draggableContainer = document.getElementById("draggableContainer");
         const floatButton = document.getElementById("floatButton");
         let isFloating = false;
 
-        // 1. Alterna entre modo normal e flutuante
         function toggleFloat() {
+            // Se estiver no PiP, primeiro saia do PiP
+            if (isPiPActive) {
+                closePiP();
+                return; // PiP será reativado no modo normal após a saída
+            }
+
             isFloating = !isFloating;
             draggableContainer.classList.toggle("floating", isFloating);
             
             if (isFloating) {
                 floatButton.textContent = "Fixar no Centro 📌";
-                // Inicia o mecanismo de arrastar
                 dragElement(draggableContainer);
             } else {
-                floatButton.textContent = "Flutuar 🎈";
-                // Limpa o posicionamento fixo para voltar ao CSS de centralização
+                floatButton.textContent = "Fixar/Mover 📌";
                 draggableContainer.style.top = null;
                 draggableContainer.style.left = null;
                 draggableContainer.style.right = null;
@@ -243,14 +260,15 @@
             }
         }
 
-        // 2. Função para arrastar o elemento
         function dragElement(elmnt) {
             let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
             
-            // Inicia o arrasto ao pressionar o mouse no próprio balão
             elmnt.onmousedown = dragMouseDown;
 
             function dragMouseDown(e) {
+                // Só arrasta se estiver no modo floating e não no PiP
+                if (!isFloating || isPiPActive) return;
+
                 e = e || window.event;
                 e.preventDefault(); 
                 
@@ -262,7 +280,6 @@
             }
 
             function elementDrag(e) {
-                // Só move se estiver no modo flutuante
                 if (!isFloating) {
                     closeDragElement();
                     return;
@@ -276,11 +293,9 @@
                 pos3 = e.clientX;
                 pos4 = e.clientY;
                 
-                // Define a nova posição do elemento
                 elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
                 elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
                 
-                // Remove as propriedades right/bottom para evitar conflitos
                 elmnt.style.right = null;
                 elmnt.style.bottom = null;
             }
@@ -289,6 +304,84 @@
                 document.onmouseup = null;
                 document.onmousemove = null;
             }
+        }
+
+        // --- CÓDIGO DO DOCUMENT PICTURE-IN-PICTURE (NOVO) ---
+        let pipWindow = null;
+        const queueContent = document.getElementById('queueContent');
+        let isPiPActive = false;
+
+        function togglePiP() {
+            if (!('documentPictureInPicture' in window)) {
+                alert("O PiP Externo (Document PiP API) não é suportado pelo seu navegador (use o Chrome mais recente).");
+                return;
+            }
+
+            if (pipWindow) {
+                // Se já estiver ativo, feche
+                closePiP();
+            } else {
+                // Se não estiver ativo, abra
+                openPiP();
+            }
+        }
+
+        async function openPiP() {
+            // 1. Tenta abrir a janela PiP
+            try {
+                // Define um tamanho inicial para a janela PiP
+                pipWindow = await documentPictureInPicture.requestWindow({
+                    width: 350,
+                    height: 500
+                });
+            } catch (error) {
+                console.error("Erro ao abrir a janela PiP:", error);
+                return;
+            }
+
+            // 2. Transfere o conteúdo (a fila) para a nova janela
+            pipWindow.document.body.appendChild(queueContent);
+
+            // 3. Copia os estilos CSS para que o conteúdo não fique sem formatação
+            const style = document.createElement('style');
+            style.textContent = document.querySelector('style').textContent;
+            pipWindow.document.head.appendChild(style);
+
+            // 4. Marca o container principal como "escondido" (pois o conteúdo está no PiP)
+            draggableContainer.classList.add('hidden-in-main');
+            
+            // 5. Atualiza o estado e o botão
+            isPiPActive = true;
+            document.getElementById("pipButton").textContent = "Voltar para Aba ↩️";
+
+            // 6. Configura o que fazer quando o usuário fecha a janela PiP
+            pipWindow.addEventListener('pagehide', closePiP);
+        }
+
+        function closePiP() {
+            if (!pipWindow) return;
+
+            // 1. Move o conteúdo de volta para o container original
+            draggableContainer.appendChild(queueContent);
+            
+            // 2. Remove a marcação de "escondido"
+            draggableContainer.classList.remove('hidden-in-main');
+
+            // 3. Fecha a janela PiP (caso não tenha sido fechada pelo usuário)
+            pipWindow.close();
+            pipWindow = null;
+
+            // 4. Atualiza o estado e o botão
+            isPiPActive = false;
+            document.getElementById("pipButton").textContent = "PiP Externo 🖼️";
+
+            // 5. Garante que o modo de flutuação DENTRO DA ABA esteja desativado
+            isFloating = false;
+            draggableContainer.classList.remove("floating");
+            draggableContainer.style.top = null;
+            draggableContainer.style.left = null;
+            
+            renderizar(); // Força a renderização para garantir que todos os eventos estejam ligados corretamente.
         }
 
         // Inicializa a renderização da fila
